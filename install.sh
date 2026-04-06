@@ -53,6 +53,17 @@ for cmd in curl python3 osascript launchctl; do
 done
 info "Required commands available"
 
+# ── Automation permission ─────────────────────────────────────────────────────
+# Trigger the macOS Automation permission prompt now (while Terminal is in the
+# foreground) so the launchd agent can control DEVONthink without a UI prompt.
+header "Requesting Automation permission for DEVONthink…"
+echo "  If a system dialog appears asking to allow Terminal to control DEVONthink,"
+echo "  click OK."
+osascript -e 'tell application id "com.devon-technologies.think" to get name' \
+    2>/dev/null || \
+    osascript -e 'tell application "DEVONthink 3" to get name' 2>/dev/null || true
+info "Automation permission step complete"
+
 # ── Detect Zotero storage path ────────────────────────────────────────────────
 header "Detecting Zotero storage path…"
 
@@ -122,12 +133,33 @@ info "Zotero credentials verified"
 # ── DEVONthink database ───────────────────────────────────────────────────────
 header "DEVONthink destination"
 
-echo "  Available databases (requires DEVONthink to be running):"
-db_list=$(osascript -e 'tell application id "com.devon-technologies.think" to get name of databases' 2>/dev/null || true)
+echo "  Available databases (requires DEVONthink to be running with databases open):"
+
+# Try bundle ID first, fall back to app name (more compatible with older macOS)
+db_list=$(osascript -e 'tell application id "com.devon-technologies.think" to get name of databases' 2>/dev/null || \
+          osascript -e 'tell application "DEVONthink 3" to get name of databases' 2>/dev/null || true)
+
 if [ -n "$db_list" ]; then
     echo "  $db_list" | tr ',' '\n' | sed 's/^ */    • /'
 else
-    warn "Could not list databases — DEVONthink may not be running"
+    # Distinguish between permissions failure and no open databases
+    dt_running=$(osascript -e 'tell application "System Events" to (name of processes) contains "DEVONthink 3"' 2>/dev/null || true)
+    if [ "$dt_running" != "true" ]; then
+        warn "DEVONthink does not appear to be running — please open it and re-run the installer"
+        prompt "Continue anyway? [y/N] "; read -r ans
+        [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
+    else
+        warn "DEVONthink is running but no databases are listed."
+        echo ""
+        echo "  This usually means either:"
+        echo "    (a) No databases are open in DEVONthink — open one and re-run the installer, or"
+        echo "    (b) Terminal lacks Automation permission to control DEVONthink."
+        echo "        Fix: System Preferences → Security & Privacy → Privacy → Automation"
+        echo "             Check the box for DEVONthink 3 under Terminal."
+        echo ""
+        prompt "Continue and enter the database name manually? [y/N] "; read -r ans
+        [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
+    fi
 fi
 
 echo ""
