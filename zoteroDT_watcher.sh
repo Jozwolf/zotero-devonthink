@@ -57,7 +57,7 @@ on run argv
             set tgt to inbox
         else
             set theDB to database dbName
-            set tgt to inbox of theDB
+            set tgt to root of theDB
         end if
         set r to import pdfPath to tgt
         return reference URL of r
