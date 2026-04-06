@@ -52,7 +52,7 @@ process_key() {
 on run argv
     set pdfPath to item 1 of argv
     set dbName to item 2 of argv
-    tell application id "com.devon-technologies.think"
+    tell application "DEVONthink 3"
         if dbName is "Global Inbox" then
             set tgt to inbox
         else
@@ -71,7 +71,7 @@ on run argv
     set pdfPath to item 1 of argv
     set dbName to item 2 of argv
     set grpName to item 3 of argv
-    tell application id "com.devon-technologies.think"
+    tell application "DEVONthink 3"
         set theDB to database dbName
         set rootGrp to root of theDB
         set tgt to missing value

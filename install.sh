@@ -59,7 +59,7 @@ info "Required commands available"
 header "Requesting Automation permission for DEVONthink…"
 echo "  If a system dialog appears asking to allow Terminal to control DEVONthink,"
 echo "  click OK."
-osascript -e 'tell application id "com.devon-technologies.think" to get name' \
+osascript -e 'tell application "DEVONthink 3" to get name' \
     2>/dev/null || \
     osascript -e 'tell application "DEVONthink 3" to get name' 2>/dev/null || true
 info "Automation permission step complete"
@@ -136,7 +136,7 @@ header "DEVONthink destination"
 echo "  Available databases (requires DEVONthink to be running with databases open):"
 
 # Try bundle ID first, fall back to app name (more compatible with older macOS)
-db_list=$(osascript -e 'tell application id "com.devon-technologies.think" to get name of databases' 2>/dev/null || \
+db_list=$(osascript -e 'tell application "DEVONthink 3" to get name of databases' 2>/dev/null || \
           osascript -e 'tell application "DEVONthink 3" to get name of databases' 2>/dev/null || true)
 
 if [ -n "$db_list" ]; then
