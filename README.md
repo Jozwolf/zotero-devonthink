@@ -12,7 +12,7 @@ Automatically imports new Zotero attachment PDFs into DEVONthink and posts the `
 
 | Requirement | Minimum version |
 |---|---|
-| macOS | 13 Ventura (tested on Sequoia 15.7.4) |
+| macOS | 11 Big Sur or later (tested on Sequoia 15.7.4) |
 | DEVONthink | 3.x |
 | Zotero | 6.x, with local storage (not cloud-only) |
 | Zotero API key | Read + write access to your personal library |

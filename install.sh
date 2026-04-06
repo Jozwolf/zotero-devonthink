@@ -24,8 +24,8 @@ header "Checking prerequisites…"
 # macOS version
 os_ver=$(sw_vers -productVersion)
 os_major=$(echo "$os_ver" | cut -d. -f1)
-if [ "$os_major" -lt 13 ]; then
-    error "macOS 13 Ventura or later required (found $os_ver)"
+if [ "$os_major" -lt 11 ]; then
+    error "macOS 11 Big Sur or later required (found $os_ver)"
     exit 1
 fi
 info "macOS $os_ver"
@@ -173,11 +173,19 @@ header "Installing launchd agent…"
 
 mkdir -p "$HOME/Library/LaunchAgents"
 
+# Unload and remove any previous installation under the old label
+OLD_PLIST="$HOME/Library/LaunchAgents/com.jimfalk.zoteroDT.plist"
+if [ -f "$OLD_PLIST" ]; then
+    launchctl unload "$OLD_PLIST" 2>/dev/null || true
+    rm -f "$OLD_PLIST"
+    warn "Removed old agent (com.jimfalk.zoteroDT)"
+fi
+
 # Substitute storage path in plist template
 sed "s|__ZOTERO_STORAGE__|${ZOTERO_STORAGE}|g" \
     "$SCRIPT_DIR/com.zoteroDT.watcher.plist.template" > "$PLIST_DEST"
 
-# Unload any previous version
+# Unload any previous version of the new label
 launchctl unload "$PLIST_DEST" 2>/dev/null || true
 
 launchctl load "$PLIST_DEST"
