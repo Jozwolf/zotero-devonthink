@@ -18,9 +18,73 @@ DT_DB="${DT_DB:-Global Inbox}"
 DT_GROUP="${DT_GROUP:-}"
 LOGFILE="${LOG:-/tmp/zoteroDT_run.log}"
 STATEFILE="$HOME/.zoteroDT_lastrun"
+PENDINGFILE="$HOME/.zoteroDT_pending"   # tab-separated: KEY \t DT_LINK \t RETRY_COUNT
+MAX_RETRIES=10
 ZOTERO_API_BASE="https://api.zotero.org/users/${ZOTERO_USER_ID}/items"
 
 log() { echo "$(date '+%H:%M:%S') $*" >> "$LOGFILE"; /usr/bin/logger -t ZoteroDT "$*"; }
+
+# Post a child note to the Zotero parent record containing the DT deep link
+post_note() {
+    local key="$1" parent="$2" dt_link="$3"
+    local payload
+    payload=$(python3 -c "
+import json, sys
+p, l = sys.argv[1], sys.argv[2]
+q = chr(34)
+n = '<p><strong>DEVONthink</strong></p><p><a href=' + q + l + q + '>' + l + '</a></p>'
+print(json.dumps([{'itemType':'note','parentItem':p,'note':n,'tags':[],'collections':[],'relations':{}}]))
+" "$parent" "$dt_link")
+
+    curl -s -X POST --max-time 15 \
+        -H "Zotero-API-Key: $ZOTERO_API_KEY" \
+        -H 'Content-Type: application/json' \
+        -d "$payload" \
+        "$ZOTERO_API_BASE" > /dev/null
+
+    log "Done: $key"
+}
+
+# Look up parentItem for a key via the Zotero web API
+lookup_parent() {
+    local key="$1"
+    curl -s --max-time 10 \
+        -H "Zotero-API-Key: $ZOTERO_API_KEY" \
+        "https://api.zotero.org/users/${ZOTERO_USER_ID}/items/$key" | \
+        python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('data', {}).get('parentItem', ''))
+except Exception:
+    print('')
+"
+}
+
+# Retry any keys that previously had no parent record
+process_pending() {
+    [ ! -f "$PENDINGFILE" ] && return
+    local tmp
+    tmp=$(mktemp)
+    while IFS=$'\t' read -r key dt_link retries; do
+        [ -z "$key" ] && continue
+        retries=$((retries + 1))
+        if [ "$retries" -gt "$MAX_RETRIES" ]; then
+            log "Giving up on pending $key after $MAX_RETRIES retries"
+            continue  # drop from pending file
+        fi
+        local parent
+        parent=$(lookup_parent "$key")
+        if [ -n "$parent" ]; then
+            log "Pending resolved: $key → parent $parent"
+            post_note "$key" "$parent" "$dt_link"
+        else
+            log "Pending retry $retries/$MAX_RETRIES: $key"
+            printf '%s\t%s\t%s\n' "$key" "$dt_link" "$retries" >> "$tmp"
+        fi
+    done < "$PENDINGFILE"
+    mv "$tmp" "$PENDINGFILE"
+}
 
 process_key() {
     local key="$1"
@@ -47,7 +111,6 @@ process_key() {
     # Import to DEVONthink
     local dt_link
     if [ -z "$DT_GROUP" ]; then
-        # No group specified — import to database root/inbox
         dt_link=$(osascript - "$pdf" "$DT_DB" << 'SCPT'
 on run argv
     set pdfPath to item 1 of argv
@@ -93,33 +156,18 @@ SCPT
     if [ -z "$dt_link" ]; then log "DEVONthink import failed for $key"; return; fi
     log "DT link: $dt_link"
 
-    # Get Zotero parent item key
+    # Look up Zotero parent
     local parent
-    parent=$(curl -s --max-time 10 \
-        -H "Zotero-API-Key: $ZOTERO_API_KEY" \
-        "https://api.zotero.org/users/${ZOTERO_USER_ID}/items/$key" | \
-        python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(d.get('data',{}).get('parentItem',''))")
+    parent=$(lookup_parent "$key")
 
-    if [ -z "$parent" ]; then log "No parentItem for $key — skipping note"; return; fi
+    if [ -z "$parent" ]; then
+        log "No parentItem for $key — queued for retry"
+        printf '%s\t%s\t%s\n' "$key" "$dt_link" "0" >> "$PENDINGFILE"
+        return
+    fi
+
     log "Parent: $parent"
-
-    # Post child note with DEVONthink link back to Zotero parent
-    local payload
-    payload=$(python3 -c "
-import json, sys
-p, l = sys.argv[1], sys.argv[2]
-q = chr(34)
-n = '<p><strong>DEVONthink</strong></p><p><a href=' + q + l + q + '>' + l + '</a></p>'
-print(json.dumps([{'itemType':'note','parentItem':p,'note':n,'tags':[],'collections':[],'relations':{}}]))
-" "$parent" "$dt_link")
-
-    curl -s -X POST --max-time 15 \
-        -H "Zotero-API-Key: $ZOTERO_API_KEY" \
-        -H 'Content-Type: application/json' \
-        -d "$payload" \
-        "$ZOTERO_API_BASE" > /dev/null
-
-    log "Done: $key"
+    post_note "$key" "$parent" "$dt_link"
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -134,6 +182,9 @@ fi
 
 new_folders=$(find "$ZOTERO_STORAGE" -maxdepth 1 -mindepth 1 -type d -newer "$STATEFILE" 2>/dev/null)
 mv "$MARKER" "$STATEFILE"
+
+# Always process any previously queued keys first
+process_pending
 
 if [ -z "$new_folders" ]; then
     log "No new folders found"
