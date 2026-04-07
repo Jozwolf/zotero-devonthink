@@ -24,6 +24,14 @@ ZOTERO_API_BASE="https://api.zotero.org/users/${ZOTERO_USER_ID}/items"
 
 log() { echo "$(date '+%H:%M:%S') $*" >> "$LOGFILE"; /usr/bin/logger -t ZoteroDT "$*"; }
 
+# Auto-detect which AppleScript reference works for DEVONthink on this machine.
+# Bundle ID works on Sequoia; app name works on older macOS.
+if osascript -e 'tell application id "com.devon-technologies.think" to get name' &>/dev/null 2>&1; then
+    DT_TELL='application id "com.devon-technologies.think"'
+else
+    DT_TELL='application "DEVONthink 3"'
+fi
+
 # Post a child note to the Zotero parent record containing the DT deep link
 post_note() {
     local key="$1" parent="$2" dt_link="$3"
@@ -111,11 +119,11 @@ process_key() {
     # Import to DEVONthink
     local dt_link
     if [ -z "$DT_GROUP" ]; then
-        dt_link=$(osascript - "$pdf" "$DT_DB" << 'SCPT'
+        dt_link=$(osascript - "$pdf" "$DT_DB" << SCPT
 on run argv
     set pdfPath to item 1 of argv
     set dbName to item 2 of argv
-    tell application "DEVONthink 3"
+    tell $DT_TELL
         if dbName is "Global Inbox" then
             set tgt to inbox
         else
@@ -129,12 +137,12 @@ end run
 SCPT
         )
     else
-        dt_link=$(osascript - "$pdf" "$DT_DB" "$DT_GROUP" << 'SCPT'
+        dt_link=$(osascript - "$pdf" "$DT_DB" "$DT_GROUP" << SCPT
 on run argv
     set pdfPath to item 1 of argv
     set dbName to item 2 of argv
     set grpName to item 3 of argv
-    tell application "DEVONthink 3"
+    tell $DT_TELL
         set theDB to database dbName
         set rootGrp to root of theDB
         set tgt to missing value
