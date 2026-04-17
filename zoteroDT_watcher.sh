@@ -19,6 +19,7 @@ DT_GROUP="${DT_GROUP:-}"
 LOGFILE="${LOG:-/tmp/zoteroDT_run.log}"
 STATEFILE="$HOME/.zoteroDT_lastrun"
 PENDINGFILE="$HOME/.zoteroDT_pending"   # tab-separated: KEY \t DT_LINK \t RETRY_COUNT
+IMPORTEDFILE="$HOME/.zoteroDT_imported" # one key per line — prevents duplicate DT imports
 MAX_RETRIES=10
 ZOTERO_API_BASE="https://api.zotero.org/users/${ZOTERO_USER_ID}/items"
 
@@ -97,6 +98,14 @@ process_pending() {
 process_key() {
     local key="$1"
     local folder="$ZOTERO_STORAGE/$key"
+
+    # Skip if already imported to DEVONthink (Zotero can update folder mtime
+    # after initial creation, causing the watcher to fire again for the same key)
+    if grep -qx "$key" "$IMPORTEDFILE" 2>/dev/null; then
+        log "Already imported: $key — skipping"
+        return
+    fi
+
     log "Processing: $key"
 
     # Poll for PDF up to 2 minutes (40 × 3 s)
@@ -162,6 +171,7 @@ SCPT
     fi
 
     if [ -z "$dt_link" ]; then log "DEVONthink import failed for $key"; return; fi
+    echo "$key" >> "$IMPORTEDFILE"
     log "DT link: $dt_link"
 
     # Look up Zotero parent
