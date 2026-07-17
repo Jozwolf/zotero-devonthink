@@ -27,13 +27,21 @@ echo ""
 echo -en "${BOLD}Proceed? [y/N] ${NC}"; read -r ans
 [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
 
-# Unload agent
+# Unload agent (new label)
 if [ -f "$PLIST_DEST" ]; then
     launchctl unload "$PLIST_DEST" 2>/dev/null || true
     rm -f "$PLIST_DEST"
-    info "Removed launchd agent"
+    info "Removed launchd agent ($PLIST_LABEL)"
 else
     warn "Agent plist not found (already removed?)"
+fi
+
+# Also clean up old label if present
+OLD_PLIST="$HOME/Library/LaunchAgents/com.jimfalk.zoteroDT.plist"
+if [ -f "$OLD_PLIST" ]; then
+    launchctl unload "$OLD_PLIST" 2>/dev/null || true
+    rm -f "$OLD_PLIST"
+    info "Removed old agent (com.jimfalk.zoteroDT)"
 fi
 
 # Remove watcher script
