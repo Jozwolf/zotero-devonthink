@@ -1,1 +1,14 @@
+# Claude Code local state
 .claude/settings.local.json
+.claude/
+
+# macOS / Microsoft Office artefacts
+.DS_Store
+~$*
+
+# Personal correspondence — never publish
+docs/Letter_*
+
+# Local working copies, unpacked .docx folders, stray downloads
+docs/*/
+/*.pdf
