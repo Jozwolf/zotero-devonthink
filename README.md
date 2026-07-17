@@ -13,7 +13,7 @@ Automatically imports new Zotero attachment PDFs into DEVONthink and posts the `
 | Requirement | Minimum version |
 |---|---|
 | macOS | 11 Big Sur or later (tested on Sequoia 15.7.4) |
-| DEVONthink | 3.x |
+| DEVONthink | 3.x or 4.x |
 | Zotero | 6.x, with local storage (not cloud-only) |
 | Zotero API key | Read + write access to your personal library |
 
@@ -22,7 +22,7 @@ Automatically imports new Zotero attachment PDFs into DEVONthink and posts the `
 ## Installation
 
 ```bash
-git clone https://github.com/jimfalk/zotero-devonthink.git
+git clone https://github.com/Jozwolf/zotero-devonthink.git
 cd zotero-devonthink
 bash install.sh
 ```

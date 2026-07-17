@@ -30,8 +30,26 @@ if [ "$os_major" -lt 11 ]; then
 fi
 info "macOS $os_ver"
 
+# ── DEVONthink detection (supports both 3.x and 4.x) ──────────────────────────
+# DEVONthink 4 registers as "DEVONthink"; 3.x registers as "DEVONthink 3".
+# The bundle ID is the same for both, so prefer it and fall back to app names.
+detect_dt_ref() {
+    if osascript -e 'tell application id "com.devon-technologies.think" to get name' &>/dev/null; then
+        echo 'application id "com.devon-technologies.think"'
+    elif osascript -e 'tell application "DEVONthink" to get name' &>/dev/null; then
+        echo 'application "DEVONthink"'
+    elif osascript -e 'tell application "DEVONthink 3" to get name' &>/dev/null; then
+        echo 'application "DEVONthink 3"'
+    fi
+}
+
+dt_is_running() {
+    osascript -e 'tell application "System Events" to get name of processes' 2>/dev/null \
+        | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -qE '^DEVONthink( 3)?$'
+}
+
 # DEVONthink
-if ! osascript -e 'tell application "System Events" to (name of processes) contains "DEVONthink 3"' 2>/dev/null | grep -q true; then
+if ! dt_is_running; then
     warn "DEVONthink does not appear to be running. It must be open during import."
     prompt "Continue anyway? [y/N] "; read -r ans
     [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
@@ -59,9 +77,13 @@ info "Required commands available"
 header "Requesting Automation permission for DEVONthink…"
 echo "  If a system dialog appears asking to allow Terminal to control DEVONthink,"
 echo "  click OK."
-osascript -e 'tell application "DEVONthink 3" to get name' \
-    2>/dev/null || \
-    osascript -e 'tell application "DEVONthink 3" to get name' 2>/dev/null || true
+DT_REF="$(detect_dt_ref)"
+if [ -n "$DT_REF" ]; then
+    osascript -e "tell $DT_REF to get name" &>/dev/null || true
+    info "DEVONthink detected: ${DT_REF#application }"
+else
+    warn "Could not reach DEVONthink via AppleScript — you may need to grant Automation permission."
+fi
 info "Automation permission step complete"
 
 # ── Detect Zotero storage path ────────────────────────────────────────────────
@@ -135,16 +157,17 @@ header "DEVONthink destination"
 
 echo "  Available databases (requires DEVONthink to be running with databases open):"
 
-# Try bundle ID first, fall back to app name (more compatible with older macOS)
-db_list=$(osascript -e 'tell application "DEVONthink 3" to get name of databases' 2>/dev/null || \
-          osascript -e 'tell application "DEVONthink 3" to get name of databases' 2>/dev/null || true)
+# Uses the reference detected earlier (bundle ID, or DEVONthink / DEVONthink 3)
+db_list=""
+if [ -n "$DT_REF" ]; then
+    db_list=$(osascript -e "tell $DT_REF to get name of databases" 2>/dev/null || true)
+fi
 
 if [ -n "$db_list" ]; then
     echo "  $db_list" | tr ',' '\n' | sed 's/^ */    • /'
 else
     # Distinguish between permissions failure and no open databases
-    dt_running=$(osascript -e 'tell application "System Events" to (name of processes) contains "DEVONthink 3"' 2>/dev/null || true)
-    if [ "$dt_running" != "true" ]; then
+    if ! dt_is_running; then
         warn "DEVONthink does not appear to be running — please open it and re-run the installer"
         prompt "Continue anyway? [y/N] "; read -r ans
         [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
@@ -155,7 +178,7 @@ else
         echo "    (a) No databases are open in DEVONthink — open one and re-run the installer, or"
         echo "    (b) Terminal lacks Automation permission to control DEVONthink."
         echo "        Fix: System Preferences → Security & Privacy → Privacy → Automation"
-        echo "             Check the box for DEVONthink 3 under Terminal."
+        echo "             Check the box for DEVONthink under Terminal."
         echo ""
         prompt "Continue and enter the database name manually? [y/N] "; read -r ans
         [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }

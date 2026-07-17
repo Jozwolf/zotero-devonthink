@@ -26,9 +26,12 @@ ZOTERO_API_BASE="https://api.zotero.org/users/${ZOTERO_USER_ID}/items"
 log() { echo "$(date '+%H:%M:%S') $*" >> "$LOGFILE"; /usr/bin/logger -t ZoteroDT "$*"; }
 
 # Auto-detect which AppleScript reference works for DEVONthink on this machine.
-# Bundle ID works on Sequoia; app name works on older macOS.
+# The bundle ID is identical for DEVONthink 3 and 4, so prefer it. Fall back to
+# the app name: DEVONthink 4 registers as "DEVONthink", 3.x as "DEVONthink 3".
 if osascript -e 'tell application id "com.devon-technologies.think" to get name' &>/dev/null 2>&1; then
     DT_TELL='application id "com.devon-technologies.think"'
+elif osascript -e 'tell application "DEVONthink" to get name' &>/dev/null 2>&1; then
+    DT_TELL='application "DEVONthink"'
 else
     DT_TELL='application "DEVONthink 3"'
 fi
